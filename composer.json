@@ -1,0 +1,21 @@
+{
+    "name": "akentner/mediatool",
+    "description": "Media tool",
+    "require": {
+        "react/react": "0.3.*",
+        "cilex/cilex": "dev-master",
+        "videlalvaro/php-amqplib": "2.2.*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Mediatool\\": "src"
+        }
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Alexander Kentner",
+            "email": "akentner@lexsign.de"
+        }
+    ]
+}

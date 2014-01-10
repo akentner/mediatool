@@ -1,0 +1,29 @@
+#!/usr/bin/php
+<?php
+use Cilex\Application;
+use Mediatool\Cli\Provider\AmqpServiceProvider;
+use Mediatool\Cli\Provider\ConfigServiceProvider;
+use Mediatool\Cli\Command;
+use Mediatool\Cli\Provider\IncrontabServiceProvider;
+
+ini_set('display_errors', 1);
+
+require __DIR__ .'/../vendor/autoload.php';
+
+
+$app = new Application('Mediatool');
+
+$app['APP_PATH'] = realpath(__DIR__ . '/..');
+
+$app->register(new ConfigServiceProvider(),
+    array(ConfigServiceProvider::CONTAINER_KEY . '.path' => $app['APP_PATH'] . '/conf/config.json')
+);
+$app->register(new AmqpServiceProvider());
+$app->register(new IncrontabServiceProvider());
+
+$app->command(new Command\IncronCommand());
+$app->command(new Command\AnalyseCommand());
+$app->command(new Command\DebugCommand());
+$app->command(new Command\WorkerCommand());
+
+$app->run();

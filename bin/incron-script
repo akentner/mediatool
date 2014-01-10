@@ -1,0 +1,121 @@
+#!/bin/bash
+
+script=$(readlink --canonicalize --no-newline $BASH_SOURCE)
+user=`whoami`;
+
+incrontab="/var/spool/incron/$user";
+tempFile="/tmp/$(basename $0).$$.$user.tmp";
+op=$1
+
+
+shopt -s extglob
+configfile="dos_or_unix"
+tr -d '\r' < $configfile > $configfile.unix
+while IFS='= ' read lhs rhs
+do
+    if [[ ! $lhs =~ ^\ *# && -n $lhs ]]; then
+        rhs="${rhs%%\#*}"    # Del in line right comments
+        rhs="${rhs%%*( )}"   # Del trailing spaces
+        rhs="${rhs%\"*}"     # Del opening string quotes
+        rhs="${rhs#\"*}"     # Del closing string quotes
+        declare $lhs="$rhs"
+    fi
+done < $configfile.unix
+
+
+# publish event to rabbitmq
+function rabbitmqPublish {
+	event=$1;
+	file=$2;
+
+    pattern="\.SyncID$|\.SyncIgnore$|\.!sync$"
+    if [[ ! $file =~ $pattern ]]; then
+        rabbitmqadmin -uguest -pguest publish exchange=files.incoming routing_key=handle payload="$event|$file" &> /dev/null
+    fi
+}
+
+# create an entry in incrontab
+function createEntry {
+	dir=$1
+
+	len=${#dir}-1
+    pattern="\.SyncArchive"
+
+#	rm -f $tempFile
+	cat $incrontab > $tempFile
+
+	while read -r dir
+	do
+	    if [[ ! $dir =~ $pattern ]]; then
+
+	    	if [ "${dir:len}" != "/" ]; then
+				dir="$dir/"
+			fi
+
+		    escDir=$(echo "$dir" | sed -e 's/ /\\ /g')
+		    chmod 777 "$dir"
+		    echo "$escDir IN_CREATE,IN_DELETE,IN_ISDIR,IN_CLOSE_WRITE $script -e \$% \$@\$#" >> $tempFile
+	    fi
+
+	done < <(find "$dir" -type d)
+
+    cat $tempFile | sort -u > $incrontab;
+    incrontab -d &> /dev/null
+#	rm -f $tempFile
+}
+
+# delete an entry in incrontab
+function deleteEntry {
+    dir=$(echo "$1" | sed -e 's/ /\\ /g')
+	len=${#dir}-1
+
+	if [ "${dir:len}" != "/" ]; then
+		dir="$dir/"
+	fi
+
+    escDir="$(echo "$dir" | sed 's/[^[:alnum:]_-]/\\&/g')"
+    awk "!/^$escDir/" $incrontab > $tempFile
+    cat $tempFile > $incrontab;
+    incrontab -d &> /dev/null
+    rm -f $tempFile
+}
+
+
+# magic
+case "$op" in
+	-c)
+		dir="${2}";
+		if [ -z "$dir" ]; then
+			dir=$(pwd)
+		fi
+		createEntry ${dir}
+		;;
+	-d)
+		dir=$2;
+		if [ -z "$dir" ]; then
+			dir=$(pwd)
+		fi
+		deleteEntry "${dir}"
+		;;
+	-e)
+		event="${2}";
+		dir="${3}";
+
+		case "$event" in
+			IN_CREATE,IN_ISDIR)
+				createEntry "$dir"
+			    ;;
+			IN_DELETE,IN_ISDIR)
+				deleteEntry "$dir"
+			    ;;
+			IN_CLOSE_WRITE)
+			    rabbitmqPublish "$event" "$dir"
+			    ;;
+			IN_MOVED_TO)
+			    rabbitmqPublish "$event" "$dir"
+			    ;;
+		esac
+		;;
+	*)
+	    echo "Usage: $0 "
+esac

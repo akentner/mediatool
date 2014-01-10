@@ -1,0 +1,25 @@
+{
+  "general": {
+    "user": "data",
+    "group": "data"
+  },
+  "service.amqp": {
+    "host": "localhost",
+    "port": "5672",
+    "vhost": "/",
+    "user": "guest",
+    "password": "guest"
+  },
+  "service.incron": {
+    "incrontab": "/etc/incron.d/mediatool",
+    "lockfile": "$APP_PATH$/var/incron.lock",
+    "bin": "$APP_PATH$/bin/mediatool",
+    "paths": [
+      "/data/_incoming/btsync"
+    ],
+    "ignore": [
+      ".SyncID",
+      ".!sync"
+    ]
+  }
+}
